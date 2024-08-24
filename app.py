@@ -13,7 +13,8 @@ model_kwargs = {
     "temperature": 0.3,
     "max_tokens": 500
 }
-
+'''
+# After Milestone 2
 @cl.on_message
 async def on_message(message: cl.Message):
     # Your custom logic goes here...
@@ -30,3 +31,39 @@ async def on_message(message: cl.Message):
         content=response_content,
     ).send()
 
+# Milestone 3 - Convert to streaming
+@cl.on_message
+async def on_message(message: cl.Message):
+    response_message = cl.Message(content="")
+    await response_message.send()
+
+    stream = await client.chat.completions.create(messages=[{"role": "user", "content": message.content}],
+                                                  stream=True, **model_kwargs)
+    async for part in stream:
+        if token := part.choices[0].delta.content or "":
+            await response_message.stream_token(token)
+
+    await response_message.update()
+'''
+# Milestone 3 - Add conversation history
+@cl.on_message
+async def on_message(message: cl.Message):
+    # Maintain an array of messages in the user session
+    message_history = cl.user_session.get("message_history", [])
+    message_history.append({"role": "user", "content": message.content})
+
+    response_message = cl.Message(content="")
+    await response_message.send()
+
+    # Pass in the full message history for each request
+    stream = await client.chat.completions.create(messages=message_history,
+                                                  stream=True, **model_kwargs)
+    async for part in stream:
+        if token := part.choices[0].delta.content or "":
+            await response_message.stream_token(token)
+
+    await response_message.update()
+
+    # Record the AI's response in the history
+    message_history.append({"role": "assistant", "content": response_message.content})
+    cl.user_session.set("message_history", message_history)
